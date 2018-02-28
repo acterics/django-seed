@@ -14,7 +14,6 @@ class ModelSeeder(object):
         """
         self.model = model
         self.field_formatters = {}
-        self.inserted_
         
 
     @staticmethod
