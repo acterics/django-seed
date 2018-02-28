@@ -21,7 +21,7 @@ class ModelSeeder(object):
     def build_one_to_one_relation(field, related_model):
         def func(inserted):
             if related_model in inserted and inserted[related_model]:
-            pk = random.choice(inserted[related_model])
+                pk = random.choice(inserted[related_model])
                 return related_model.objects.get(pk=pk)
             elif not field.null:
                 message = 'Field {} cannot be null'.format(field)
