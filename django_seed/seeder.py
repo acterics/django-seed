@@ -3,7 +3,7 @@ import random
 from django.db.models import ForeignKey, ManyToManyField, OneToOneField
 from django.db.models.fields import AutoField
 
-from django_seed.exceptions import SeederException
+from django_seed.exceptions import SeederException, SeederOneToOneRelationException
 from django_seed.guessers import NameGuesser, FieldTypeGuesser
 
 
@@ -14,13 +14,29 @@ class ModelSeeder(object):
         """
         self.model = model
         self.field_formatters = {}
-        
+
+    one_to_one_indexes = {}
+
+    @staticmethod
+    def choice_unique(field, related_insetions):
+        if not one_to_one_indexes[field]:
+            one_to_one_indexes[field] = []
+        field_indexes = one_to_one_indexes[field]
+        filtered_list = [i for i in related_insertions if i not in field_indexes]
+        if not filtered_list:
+            message = 'Field {} need more unique values of related model'.format(field)
+            raise SeederOneToOneRelationException(message)
+        pk = random.choice(filtered_list)
+        field_indexes.append(pk)
+        return pk
+
+
 
     @staticmethod
     def build_one_to_one_relation(field, related_model):
         def func(inserted):
             if related_model in inserted and inserted[related_model]:
-                pk = random.choice(inserted[related_model])
+                pk = choice_unique(field, inserted[related_model])
                 return related_model.objects.get(pk=pk)
             elif not field.null:
                 message = 'Field {} cannot be null'.format(field)

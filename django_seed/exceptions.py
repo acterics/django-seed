@@ -7,3 +7,6 @@ class SeederException(Exception):
 
 class SeederCommandError(CommandError):
     pass
+
+class SeederOneToOneRelationException(CommandError):
+    pass
