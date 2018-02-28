@@ -14,14 +14,41 @@ class ModelSeeder(object):
         """
         self.model = model
         self.field_formatters = {}
+        self.inserted_
+        
 
     @staticmethod
-    def build_relation(field, related_model):
+    def build_one_to_one_relation(field, related_model):
+        def func(inserted):
+            if related_model in inserted and inserted[related_model]:
+            pk = random.choice(inserted[related_model])
+                return related_model.objects.get(pk=pk)
+            elif not field.null:
+                message = 'Field {} cannot be null'.format(field)
+                raise SeederException(message)
+
+        return func
+
+    @staticmethod
+    def build_one_to_many_relation(field, related_model):
         def func(inserted):
             if related_model in inserted and inserted[related_model]:
                 pk = random.choice(inserted[related_model])
                 return related_model.objects.get(pk=pk)
-            else:
+            elif not field.null:
+                message = 'Field {} cannot be null'.format(field)
+                raise SeederException(message)
+
+        return func
+
+
+    def build_many_to_many_relation(field, related_model):
+        def func(inserted):
+            if related_model in inserted and inserted[related_model]:
+                related_insetions = inserted[related_model]
+                ids = random.sample(related_insetions, random.randint(1, related_insetions.size))
+                return related_model.objects.filter(id__in=type_ids)
+            elif not field.null:
                 message = 'Field {} cannot be null'.format(field)
                 raise SeederException(message)
 
@@ -45,9 +72,18 @@ class ModelSeeder(object):
                 formatters[field_name] = field.get_default()
                 continue
             
-            if isinstance(field, (ForeignKey, ManyToManyField, OneToOneField)):
-                formatters[field_name] = self.build_relation(field, field.related_model)
+            if isinstance(field, ForeignKey):
+                formatters[field_name] = self.build_one_to_many_relation(field, field.related_model)
                 continue
+
+            if isinstance(field, OneToOneField):
+                formatters[field_name] = self.build_one_to_one_relation(field, field.related_model)
+                continue
+            
+            if isinstance(field, ManyToManyField):
+                formatters[field_name] = self.build_many_to_many_relation(field, field.related_model)
+                continue
+
 
             if isinstance(field, AutoField):
                 continue
