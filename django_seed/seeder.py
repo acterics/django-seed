@@ -19,9 +19,9 @@ class ModelSeeder(object):
 
     @staticmethod
     def choice_unique(field, related_insetions):
-        if not one_to_one_indexes[field]:
-            one_to_one_indexes[field] = []
-        field_indexes = one_to_one_indexes[field]
+        if not one_to_one_indexes[field.name]:
+            one_to_one_indexes[field.name] = []
+        field_indexes = one_to_one_indexes[field.name]
         filtered_list = [i for i in related_insertions if i not in field_indexes]
         if not filtered_list:
             message = 'Field {} need more unique values of related model'.format(field)
