@@ -6,7 +6,7 @@ from faker import Faker
 
 from django_seed.guessers import NameGuesser, FieldTypeGuesser
 from django_seed.seeder import Seeder
-from django_seed.exceptions import SeederException, SeederCommandError
+from django_seed.exceptions import SeederException, SeederCommandError, SeederOneToOneRelationException
 from django_seed import Seed
 
 import random
@@ -93,6 +93,17 @@ class Product(models.Model):
     description = models.TextField(default='default long description')
     enabled = models.BooleanField(default=True)
 
+class Object(models.Model):
+    name = models.CharField(max_length=100)
+    subobject = models.OneToOneField('Subobject', on_delete=models.CASCADE, null=True)
+
+class Subobject(models.Model):
+    name = models.CharField(max_length=100)
+
+
+
+
+    
 
 class NameGuesserTestCase(TestCase):
 
@@ -215,6 +226,32 @@ class SeederTestCase(TestCase):
 
         games = Game.objects.filter(pk__in=inserted_pks)
         self.assertTrue(all(game.updated_at == date for game in games))
+
+
+    def test_one_to_one_population_always_success(self):
+        faker = fake
+        seeder = Seeder(faker)
+        seeder.add_entity(Subobject, 10)
+        seeder.add_entity(Object, 5)
+
+        inserted_pks = seeder.execute()
+
+        self.assertEqual(len(inserted_pks[Subobject]), 10)
+        self.assertEqual(len(inserted_pks[Object]), 5)
+
+    def test_one_to_one_population_always_fail(self):
+        faker = fake
+        seeder = Seeder(faker)
+
+        try:
+            seeder.add_entity(Subobject, 5)
+            seeder.add_entity(Subobject, 10)
+            seeder.execute()
+        except Exception as e:
+            self.assertTrue(isinstance(e, SeederOneToOneRelationException))
+        pass
+
+
 
 
 class APISeedTestCase(TestCase):

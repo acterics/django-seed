@@ -33,3 +33,4 @@ var/
 env/
 .idea
 .vscode
+venv/
