@@ -64,8 +64,8 @@ class Player(models.Model):
     score = models.BigIntegerField()
     last_login_at = models.DateTimeField()
     game = models.ForeignKey(to=Game, on_delete=models.CASCADE)
-    ip = models.IPAddressField()
-    achievements = models.CommaSeparatedIntegerField(max_length=1000)
+    # ip = models.IPAddressField()
+    # achievements = models.CommaSeparatedIntegerField(max_length=1000)
     friends = models.PositiveIntegerField()
     balance = models.FloatField()
 
@@ -232,12 +232,14 @@ class SeederTestCase(TestCase):
         faker = fake
         seeder = Seeder(faker)
         seeder.add_entity(Subobject, 10)
-        seeder.add_entity(Object, 5)
+        seeder.add_entity(Object, 10)
 
         inserted_pks = seeder.execute()
 
         self.assertEqual(len(inserted_pks[Subobject]), 10)
-        self.assertEqual(len(inserted_pks[Object]), 5)
+        self.assertEqual(len(inserted_pks[Object]), 10)
+
+
 
     def test_one_to_one_population_always_fail(self):
         faker = fake

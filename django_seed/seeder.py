@@ -7,6 +7,7 @@ from django_seed.exceptions import SeederException, SeederOneToOneRelationExcept
 from django_seed.guessers import NameGuesser, FieldTypeGuesser
 
 
+one_to_one_indexes = {}
 class ModelSeeder(object):
     def __init__(self, model):
         """
@@ -14,12 +15,10 @@ class ModelSeeder(object):
         """
         self.model = model
         self.field_formatters = {}
-
-    one_to_one_indexes = {}
-
+    
     @staticmethod
-    def choice_unique(field, related_insetions):
-        if not one_to_one_indexes[field.name]:
+    def choice_unique(field, related_insertions):
+        if field.name not in one_to_one_indexes:
             one_to_one_indexes[field.name] = []
         field_indexes = one_to_one_indexes[field.name]
         filtered_list = [i for i in related_insertions if i not in field_indexes]
@@ -27,7 +26,7 @@ class ModelSeeder(object):
             message = 'Field {} need more unique values of related model'.format(field)
             raise SeederOneToOneRelationException(message)
         pk = random.choice(filtered_list)
-        field_indexes.append(pk)
+        one_to_one_indexes[field.name].append(pk)
         return pk
 
 
@@ -36,7 +35,7 @@ class ModelSeeder(object):
     def build_one_to_one_relation(field, related_model):
         def func(inserted):
             if related_model in inserted and inserted[related_model]:
-                pk = choice_unique(field, inserted[related_model])
+                pk = ModelSeeder.choice_unique(field, inserted[related_model])
                 return related_model.objects.get(pk=pk)
             elif not field.null:
                 message = 'Field {} cannot be null'.format(field)
@@ -87,17 +86,21 @@ class ModelSeeder(object):
                 formatters[field_name] = field.get_default()
                 continue
             
+            if isinstance(field, OneToOneField):
+                formatters[field_name] = self.build_one_to_one_relation(field, field.related_model)
+                continue
+
+            if isinstance(field, ManyToManyField):
+                formatters[field_name] = self.build_many_to_many_relation(field, field.related_model)
+                continue
+
             if isinstance(field, ForeignKey):
                 formatters[field_name] = self.build_one_to_many_relation(field, field.related_model)
                 continue
 
-            if isinstance(field, OneToOneField):
-                formatters[field_name] = self.build_one_to_one_relation(field, field.related_model)
-                continue
             
-            if isinstance(field, ManyToManyField):
-                formatters[field_name] = self.build_many_to_many_relation(field, field.related_model)
-                continue
+            
+            
 
 
             if isinstance(field, AutoField):
@@ -200,6 +203,7 @@ class Seeder(object):
                 entity = self.entities[klass].execute(using, inserted_entities)
                 inserted_entities[klass].append(entity)
 
+        one_to_one_indexes.clear()
         return inserted_entities
 
     def get_connection(self):
