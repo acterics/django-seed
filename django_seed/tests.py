@@ -96,11 +96,13 @@ class Product(models.Model):
 class Object(models.Model):
     name = models.CharField(max_length=100)
     subobject = models.OneToOneField('Subobject', on_delete=models.CASCADE, null=True)
+    many_to_many = models.ManyToManyField('ManySubobject', null=True)
 
 class Subobject(models.Model):
     name = models.CharField(max_length=100)
 
-
+class ManySubobject(models.Model):
+    name = models.CharField(max_length=100)
 
 
     
@@ -239,19 +241,25 @@ class SeederTestCase(TestCase):
         self.assertEqual(len(inserted_pks[Subobject]), 10)
         self.assertEqual(len(inserted_pks[Object]), 10)
 
-
-
-    def test_one_to_one_population_always_fail(self):
+    def test_many_to_many_population_success(self):
         faker = fake
         seeder = Seeder(faker)
 
-        try:
-            seeder.add_entity(Subobject, 5)
-            seeder.add_entity(Subobject, 10)
-            seeder.execute()
-        except Exception as e:
-            self.assertTrue(isinstance(e, SeederOneToOneRelationException))
-        pass
+        seeder.add_entity(ManySubobject, 50)
+        seeder.add_entity(Object, 5, many_to_many_count_dict = {
+            'many_to_many': 5
+        })
+        inserted_ids = seeder.execute()
+
+        for object_id in inserted_ids[Object]:
+            object_model = Object.objects.get(id=object_id)
+            subobjects = list(object_model.many_to_many.all())
+            print(subobjects)
+            print('\n')
+            self.assertTrue(len(subobjects) == 5)
+
+        
+
 
 
 

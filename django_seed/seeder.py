@@ -15,6 +15,8 @@ class ModelSeeder(object):
         """
         self.model = model
         self.field_formatters = {}
+        self.many_to_many_formatters = {}
+        self.many_to_many_count_dict = {}
     
     @staticmethod
     def choice_unique(field, related_insertions):
@@ -22,6 +24,7 @@ class ModelSeeder(object):
             one_to_one_indexes[field.name] = []
         field_indexes = one_to_one_indexes[field.name]
         filtered_list = [i for i in related_insertions if i not in field_indexes]
+        
         if not filtered_list:
             message = 'Field {} need more unique values of related model'.format(field)
             raise SeederOneToOneRelationException(message)
@@ -56,17 +59,32 @@ class ModelSeeder(object):
         return func
 
 
-    def build_many_to_many_relation(field, related_model):
-        def func(inserted):
+    @staticmethod
+    def build_many_to_many_relation(field, related_model, count=None):
+        def func(obj, inserted):
             if related_model in inserted and inserted[related_model]:
                 related_insetions = inserted[related_model]
-                ids = random.sample(related_insetions, random.randint(1, related_insetions.size))
-                return related_model.objects.filter(id__in=type_ids)
-            elif not field.null:
-                message = 'Field {} cannot be null'.format(field)
-                raise SeederException(message)
-
+                if count and count > 0:
+                    actual_count = min(count, len(related_insetions))
+                else:
+                    actual_count = random.randint(1, len(related_insetions))
+                
+                ids = random.sample(related_insetions, actual_count)
+                getattr(obj, field.attname).set(ids)
         return func
+
+    def create_many_to_many_formatters(self):
+        formatters = {}
+        for field in self.model._meta.local_many_to_many:
+            field_name = field.name
+            if field_name in self.many_to_many_count_dict:
+                count = self.many_to_many_count_dict[field_name]
+            else:
+                count = None
+            formatters[field_name] = self.build_many_to_many_relation(field, field.related_model, count=count)
+
+        return formatters
+
 
     def guess_field_formatters(self, faker):
         """
@@ -90,18 +108,10 @@ class ModelSeeder(object):
                 formatters[field_name] = self.build_one_to_one_relation(field, field.related_model)
                 continue
 
-            if isinstance(field, ManyToManyField):
-                formatters[field_name] = self.build_many_to_many_relation(field, field.related_model)
-                continue
-
+        
             if isinstance(field, ForeignKey):
                 formatters[field_name] = self.build_one_to_many_relation(field, field.related_model)
                 continue
-
-            
-            
-            
-
 
             if isinstance(field, AutoField):
                 continue
@@ -116,6 +126,9 @@ class ModelSeeder(object):
             if formatter:
                 formatters[field_name] = formatter
                 continue
+        
+        
+
 
         return formatters
 
@@ -131,6 +144,14 @@ class ModelSeeder(object):
                 return format(inserted_entities)
             return format
 
+        def format_many_to_many_field(obj, format, inserted_entities):
+            if callable(format):
+                format(obj, inserted_entities)
+            else:
+                message = "Many to many format must be callable"
+                raise SeederException(message)
+                
+
         def turn_off_auto_add(model):
             for field in model._meta.fields:
                 if getattr(field, 'auto_now', False):
@@ -141,10 +162,18 @@ class ModelSeeder(object):
         manager = self.model.objects.db_manager(using=using)
         turn_off_auto_add(manager.model)
 
-        obj = manager.create(**{
+
+
+        create_dict = { 
             field: format_field(field_format, inserted_entities)
             for field, field_format in self.field_formatters.items()
-        })
+        }
+
+
+
+        obj = manager.create(**create_dict)
+        for format in self.many_to_many_formatters.values():
+            format_many_to_many_field(obj, format, inserted_entities)
 
         return obj.pk
 
@@ -159,7 +188,7 @@ class Seeder(object):
         self.quantities = {}
         self.orders = []
 
-    def add_entity(self, model, number, customFieldFormatters=None):
+    def add_entity(self, model, number, customFieldFormatters=None, many_to_many_count_dict=None):
         """
         Add an order for the generation of $number records for $entity.
 
@@ -174,8 +203,12 @@ class Seeder(object):
         """
         if not isinstance(model, ModelSeeder):
             model = ModelSeeder(model)
-
+        if many_to_many_count_dict:
+            model.many_to_many_count_dict = many_to_many_count_dict
+        
         model.field_formatters = model.guess_field_formatters(self.faker)
+        model.many_to_many_formatters = model.create_many_to_many_formatters()
+        
         if customFieldFormatters:
             model.field_formatters.update(customFieldFormatters)
 
