@@ -93,19 +93,29 @@ class Product(models.Model):
     description = models.TextField(default='default long description')
     enabled = models.BooleanField(default=True)
 
-class Object(models.Model):
-    name = models.CharField(max_length=100)
-    subobject = models.OneToOneField('Subobject', on_delete=models.CASCADE, null=True)
-    many_to_many = models.ManyToManyField('ManySubobject', null=True)
 
 class Subobject(models.Model):
     name = models.CharField(max_length=100)
 
+
 class ManySubobject(models.Model):
     name = models.CharField(max_length=100)
 
+class ThroughSubobject(models.Model):
+    name = models.CharField(max_length=100)
 
-    
+class Through(models.Model):
+    parent = models.ForeignKey('Object', on_delete=models.CASCADE)
+    subobject = models.ForeignKey(ThroughSubobject, on_delete=models.CASCADE)
+    payload = models.CharField(max_length=200)
+
+class Object(models.Model):
+    name = models.CharField(max_length=100)
+    subobject = models.OneToOneField(Subobject, on_delete=models.CASCADE, null=True)
+    many_to_many = models.ManyToManyField(ManySubobject, null=True)
+    many_to_many_through = models.ManyToManyField(ThroughSubobject, through=Through)
+
+
 
 class NameGuesserTestCase(TestCase):
 
@@ -241,22 +251,43 @@ class SeederTestCase(TestCase):
         self.assertEqual(len(inserted_pks[Subobject]), 10)
         self.assertEqual(len(inserted_pks[Object]), 10)
 
+
     def test_many_to_many_population_success(self):
         faker = fake
         seeder = Seeder(faker)
 
+        mtm_count = 10
+        mtmt_count = 12
+        payload = "Payload"
+
+        def resolver(obj, id):
+            Through.objects.create(
+                parent_id=obj.id,
+                subobject_id=id,
+                payload=payload
+            )
+
+        seeder.add_entity(ThroughSubobject, 50)
         seeder.add_entity(ManySubobject, 50)
-        seeder.add_entity(Object, 5, many_to_many_count_dict = {
-            'many_to_many': 5
-        })
+        seeder.add_entity(Object, 5, 
+            many_to_many_count_dict = {
+                'many_to_many': mtm_count,
+                'many_to_many_through': mtmt_count
+            },
+        
+            many_to_many_through_resolver_dict= {
+                'many_to_many_through': resolver
+            })
+        
         inserted_ids = seeder.execute()
 
         for object_id in inserted_ids[Object]:
             object_model = Object.objects.get(id=object_id)
-            subobjects = list(object_model.many_to_many.all())
-            print(subobjects)
-            print('\n')
-            self.assertTrue(len(subobjects) == 5)
+            mtm_subobjects = list(object_model.many_to_many.all())
+            mtmt_subobjects = list(object_model.many_to_many_through.filter(through__payload=payload))
+            self.assertTrue(len(mtm_subobjects) == mtm_count)
+            self.assertTrue(len(mtmt_subobjects) == mtmt_count)
+
 
         
 

@@ -17,6 +17,7 @@ class ModelSeeder(object):
         self.field_formatters = {}
         self.many_to_many_formatters = {}
         self.many_to_many_count_dict = {}
+        self.many_to_many_through_resolver_dict = {}
     
     @staticmethod
     def choice_unique(field, related_insertions):
@@ -47,7 +48,7 @@ class ModelSeeder(object):
         return func
 
     @staticmethod
-    def build_one_to_many_relation(field, related_model):
+    def build_one_to_many_relation(field, related_model, count=None):
         def func(inserted):
             if related_model in inserted and inserted[related_model]:
                 pk = random.choice(inserted[related_model])
@@ -60,28 +61,38 @@ class ModelSeeder(object):
 
 
     @staticmethod
-    def build_many_to_many_relation(field, related_model, count=None):
+    def build_many_to_many_relation(field, related_model, count=None, resolver=None):
         def func(obj, inserted):
             if related_model in inserted and inserted[related_model]:
                 related_insetions = inserted[related_model]
+                if count == 0:
+                    return
                 if count and count > 0:
                     actual_count = min(count, len(related_insetions))
                 else:
                     actual_count = random.randint(1, len(related_insetions))
-                
                 ids = random.sample(related_insetions, actual_count)
-                getattr(obj, field.attname).set(ids)
+                if not ids:
+                    return
+                if resolver:
+                    for id in ids:
+                        resolver(obj, id)
+                else:
+                    try:
+                        getattr(obj, field.attname).set(ids)
+                    except Exception as e:
+                        return
         return func
 
     def create_many_to_many_formatters(self):
         formatters = {}
         for field in self.model._meta.local_many_to_many:
             field_name = field.name
-            if field_name in self.many_to_many_count_dict:
-                count = self.many_to_many_count_dict[field_name]
-            else:
-                count = None
-            formatters[field_name] = self.build_many_to_many_relation(field, field.related_model, count=count)
+            count = self.many_to_many_count_dict.get(field_name, None)
+            resolver = self.many_to_many_through_resolver_dict.get(field_name, None)
+            formatters[field_name] = self.build_many_to_many_relation(
+                field, field.related_model, count=count, resolver=resolver
+            )
 
         return formatters
 
@@ -188,7 +199,10 @@ class Seeder(object):
         self.quantities = {}
         self.orders = []
 
-    def add_entity(self, model, number, customFieldFormatters=None, many_to_many_count_dict=None):
+    def add_entity(self, model, number,
+         customFieldFormatters=None,
+         many_to_many_count_dict=None,
+         many_to_many_through_resolver_dict=None):
         """
         Add an order for the generation of $number records for $entity.
 
@@ -205,6 +219,8 @@ class Seeder(object):
             model = ModelSeeder(model)
         if many_to_many_count_dict:
             model.many_to_many_count_dict = many_to_many_count_dict
+        if many_to_many_through_resolver_dict:
+            model.many_to_many_through_resolver_dict = many_to_many_through_resolver_dict
         
         model.field_formatters = model.guess_field_formatters(self.faker)
         model.many_to_many_formatters = model.create_many_to_many_formatters()
